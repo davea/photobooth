@@ -8,7 +8,8 @@ from glob import glob
 from picamera import PiCamera, Color
 from ft5406 import Touchscreen
 from PIL import Image
-import gphoto2 as gp
+
+from camera import Camera
 
 TEST_MODE = bool(os.getenv("TEST_MODE", False))
 
@@ -16,7 +17,6 @@ BURST_COUNT = 1
 OVERLAY_ALPHA = 128
 
 # global variables (ick) for gphoto2
-gp_context = None
 gp_camera = None
 # global PiCamera instance
 pi_camera = None
@@ -24,43 +24,21 @@ pi_camera_overlays = {}
 # global Touchscreen instance
 touchscreen = None
 
-def setup_gphoto():
-    global gp_context, gp_camera
-    if gp_context is not None or gp_camera is not None:
-        teardown_gphoto()
-    print("Setting up gphoto connection")
-    gp_context = gp.gp_context_new()
-    gp_camera = gp.check_result(gp.gp_camera_new())
-    gp.check_result(gp.gp_camera_init(gp_camera, gp_context))
-
-def teardown_gphoto():
-    global gp_context, gp_camera
-    print("Closing gphoto connection")
-    gp.check_result(gp.gp_camera_exit(gp_camera, gp_context))
-    gp_context, gp_camera = None, None
-
 def take_dslr_photo(count=BURST_COUNT):
-    setup_gphoto()
+    global gp_camera
+    if gp_camera is None:
+        print("Creating Camera object")
+        gp_camera = Camera()
     print("Starting countdown...")
     for i in range(3, 0, -1):
-        set_camera_overlay("countdown{}".format(i))
+        show_overlay("countdown{}".format(i))
         print("{}!".format(i))
         time.sleep(1)
     for i in range(count):
         print("Taking photo with gphoto2...")
-        set_camera_overlay("cheese")
-        file_path = gp.check_result(gp.gp_camera_capture(
-            gp_camera, gp.GP_CAPTURE_IMAGE, gp_context))
-        print("Took photo")
-        f, target = tempfile.mkstemp(".jpg")
-        camera_file = gp.check_result(gp.gp_camera_file_get(
-                gp_camera, file_path.folder, file_path.name,
-                gp.GP_FILE_TYPE_NORMAL, gp_context))
-        print("Got file")
-        gp.check_result(gp.gp_file_save(camera_file, target))
-        print("Saved to {}".format(target))
-    set_camera_overlay("intro")
-    teardown_gphoto()
+        show_overlay("cheese")
+        gp_camera.capture()
+    show_overlay("intro")
 
 def setup_touchscreen():
     global touchscreen
@@ -76,7 +54,7 @@ def setup_picamera():
     pi_camera.hflip = True
     pi_camera.start_preview()
     setup_overlays()
-    set_camera_overlay('intro')
+    show_overlay('intro')
 
 def setup_overlays():
     for filename in glob("overlays/*.png"):
@@ -100,7 +78,7 @@ def setup_overlays():
         }
         print("all done")
 
-def set_camera_overlay(name):
+def show_overlay(name):
     o = pi_camera_overlays[name]
     window = (0, 480-o['size'][1], o['size'][0], o['size'][1])
     overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=3, window=window, fullscreen=False)
