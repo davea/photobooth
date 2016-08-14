@@ -40,6 +40,16 @@ def take_dslr_photo(count=BURST_COUNT):
         gp_camera.capture()
     show_overlay("intro")
 
+def update_battery_level():
+    if gp_camera is None:
+        pi_camera.annotate_text = ""
+        return
+    battery = gp_camera.battery_level
+    if battery < 100:
+        pi_camera.annotate_text = "Camera battery low! {}%".format(battery)
+    else:
+        pi_camera.annotate_text = ""
+
 def setup_touchscreen():
     global touchscreen
     touchscreen = Touchscreen()
@@ -84,6 +94,7 @@ def show_overlay(name):
     overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=3, window=window, fullscreen=False)
     while len(pi_camera.overlays) > 1:
         pi_camera.remove_overlay(pi_camera.overlays[0])
+    update_battery_level()
 
 def teardown_picamera():
     pi_camera.stop_preview()
