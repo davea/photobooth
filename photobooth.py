@@ -37,9 +37,8 @@ def take_dslr_photo(count=BURST_COUNT):
     for i in range(count):
         print("Taking photo with gphoto2...")
         show_overlay("cheese")
-        gp_camera.capture()
-    show_overlay("intro")
-
+        photo_path = gp_camera.capture()
+    show_photo(photo_path)
 def update_battery_level():
     if gp_camera is None or gp_camera.battery_level is None:
         pi_camera.annotate_text = ""
@@ -69,24 +68,28 @@ def setup_picamera():
 def setup_overlays():
     for filename in glob("overlays/*.png"):
         name = os.path.basename(filename).rsplit(".png", 1)[0]
-        # Load the arbitrarily sized image
-        img = Image.open(filename)
-        # Create an image padded to the required size with
-        # mode 'RGB'
-        print("loaded image")
-        pad = Image.new('RGB', (
-            ((img.size[0] + 31) // 32) * 32,
-            ((img.size[1] + 15) // 16) * 16,
-            ))
-        print("created new image")
-        # Paste the original image into the padded one
-        pad.paste(img, (0, 0))
-        print("pasted image")
+        size, image = load_image_for_overlay(filename)
         pi_camera_overlays[name] = {
-            'bytes': pad.tobytes(),
-            'size': img.size,
+            'bytes': image.tobytes(),
+            'size': size,
         }
         print("all done")
+
+def load_image_for_overlay(path):
+    # Load the arbitrarily sized image
+    img = Image.open(path)
+    # Create an image padded to the required size with
+    # mode 'RGB'
+    print("loaded image")
+    pad = Image.new('RGB', (
+        ((img.size[0] + 31) // 32) * 32,
+        ((img.size[1] + 15) // 16) * 16,
+        ))
+    print("created new image")
+    # Paste the original image into the padded one
+    pad.paste(img, (0, 0))
+    print("pasted image")
+    return img.size, pad
 
 def show_overlay(name):
     o = pi_camera_overlays[name]
@@ -95,6 +98,17 @@ def show_overlay(name):
     while len(pi_camera.overlays) > 1:
         pi_camera.remove_overlay(pi_camera.overlays[0])
     update_battery_level()
+
+def show_photo(path):
+    _, image = load_image_for_overlay(path)
+    image = image.resize((800, 532)).crop((0,26,800,506))
+    while pi_camera.overlays:
+        pi_camera.remove_overlay(pi_camera.overlays[0])
+    overlay = pi_camera.add_overlay(image.tobytes(), size=image.size, layer=3)
+
+    # wait for a few seconds or until the screen is tapped
+    time.sleep(5)
+    show_overlay("intro")
 
 def teardown_picamera():
     pi_camera.stop_preview()
