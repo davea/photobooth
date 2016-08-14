@@ -26,14 +26,21 @@ touchscreen = None
 
 def setup_gphoto():
     global gp_context, gp_camera
+    if gp_context is not None or gp_camera is not None:
+        teardown_gphoto()
+    print("Setting up gphoto connection")
     gp_context = gp.gp_context_new()
     gp_camera = gp.check_result(gp.gp_camera_new())
     gp.check_result(gp.gp_camera_init(gp_camera, gp_context))
 
 def teardown_gphoto():
+    global gp_context, gp_camera
+    print("Closing gphoto connection")
     gp.check_result(gp.gp_camera_exit(gp_camera, gp_context))
+    gp_context, gp_camera = None, None
 
 def take_dslr_photo(count=BURST_COUNT):
+    setup_gphoto()
     print("Starting countdown...")
     for i in range(3, 0, -1):
         set_camera_overlay("countdown{}".format(i))
@@ -41,7 +48,6 @@ def take_dslr_photo(count=BURST_COUNT):
         time.sleep(1)
     for i in range(count):
         print("Taking photo with gphoto2...")
-        pi_camera.annotate_text = ""
         set_camera_overlay("cheese")
         file_path = gp.check_result(gp.gp_camera_capture(
             gp_camera, gp.GP_CAPTURE_IMAGE, gp_context))
@@ -54,6 +60,7 @@ def take_dslr_photo(count=BURST_COUNT):
         gp.check_result(gp.gp_file_save(camera_file, target))
         print("Saved to {}".format(target))
     set_camera_overlay("intro")
+    teardown_gphoto()
 
 def setup_touchscreen():
     global touchscreen
@@ -66,6 +73,7 @@ def setup_picamera():
     global pi_camera
     pi_camera = PiCamera()
     pi_camera.vflip = False
+    pi_camera.hflip = True
     pi_camera.start_preview()
     setup_overlays()
     set_camera_overlay('intro')
@@ -105,7 +113,6 @@ def teardown_picamera():
 
 def main():
     setup_picamera()
-    setup_gphoto()
     setup_touchscreen()
     print("Running in test mode" if TEST_MODE else "Running in interactive mode")
     try:
@@ -126,7 +133,6 @@ def main():
         print("Caught Ctrl-C, shutting down...")
     finally:
         teardown_picamera()
-        teardown_gphoto()
 
 if __name__ == '__main__':
     main()
