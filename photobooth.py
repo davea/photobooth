@@ -3,26 +3,24 @@ import os
 import time
 import tempfile
 import random
+from glob import glob
 
 from picamera import PiCamera, Color
 from ft5406 import Touchscreen
+from PIL import Image
 import gphoto2 as gp
 
 TEST_MODE = bool(os.getenv("TEST_MODE", False))
 
-MESSAGES = {
-    "cheese": "SAY CHEESE!",
-    "touch_screen": "Touch the screen to take a photo!",
-    "saving": "Lovely!",
-}
-
 BURST_COUNT = 1
+OVERLAY_ALPHA = 128
 
 # global variables (ick) for gphoto2
 gp_context = None
 gp_camera = None
 # global PiCamera instance
 pi_camera = None
+pi_camera_overlays = {}
 # global Touchscreen instance
 touchscreen = None
 
@@ -38,16 +36,16 @@ def teardown_gphoto():
 def take_dslr_photo(count=BURST_COUNT):
     print("Starting countdown...")
     for i in range(3, 0, -1):
-        pi_camera.annotate_text = "{}!".format(i)
+        set_camera_overlay("countdown{}".format(i))
         print("{}!".format(i))
         time.sleep(1)
     for i in range(count):
         print("Taking photo with gphoto2...")
-        pi_camera.annotate_text = MESSAGES['cheese']
+        pi_camera.annotate_text = ""
+        set_camera_overlay("cheese")
         file_path = gp.check_result(gp.gp_camera_capture(
             gp_camera, gp.GP_CAPTURE_IMAGE, gp_context))
         print("Took photo")
-        pi_camera.annotate_text = MESSAGES['saving']
         f, target = tempfile.mkstemp(".jpg")
         camera_file = gp.check_result(gp.gp_camera_file_get(
                 gp_camera, file_path.folder, file_path.name,
@@ -55,7 +53,7 @@ def take_dslr_photo(count=BURST_COUNT):
         print("Got file")
         gp.check_result(gp.gp_file_save(camera_file, target))
         print("Saved to {}".format(target))
-    pi_camera.annotate_text = MESSAGES['touch_screen']
+    set_camera_overlay("intro")
 
 def setup_touchscreen():
     global touchscreen
@@ -67,10 +65,39 @@ def setup_touchscreen():
 def setup_picamera():
     global pi_camera
     pi_camera = PiCamera()
+    pi_camera.vflip = False
     pi_camera.start_preview()
-    pi_camera.vflip = True
-    pi_camera.annotate_background = Color('black')
-    pi_camera.annotate_text = MESSAGES['touch_screen']
+    setup_overlays()
+    set_camera_overlay('intro')
+
+def setup_overlays():
+    for filename in glob("overlays/*.png"):
+        name = os.path.basename(filename).rsplit(".png", 1)[0]
+        # Load the arbitrarily sized image
+        img = Image.open(filename)
+        # Create an image padded to the required size with
+        # mode 'RGB'
+        print("loaded image")
+        pad = Image.new('RGB', (
+            ((img.size[0] + 31) // 32) * 32,
+            ((img.size[1] + 15) // 16) * 16,
+            ))
+        print("created new image")
+        # Paste the original image into the padded one
+        pad.paste(img, (0, 0))
+        print("pasted image")
+        pi_camera_overlays[name] = {
+            'bytes': pad.tobytes(),
+            'size': img.size,
+        }
+        print("all done")
+
+def set_camera_overlay(name):
+    o = pi_camera_overlays[name]
+    window = (0, 480-o['size'][1], o['size'][0], o['size'][1])
+    overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=3, window=window, fullscreen=False)
+    while len(pi_camera.overlays) > 1:
+        pi_camera.remove_overlay(pi_camera.overlays[0])
 
 def teardown_picamera():
     pi_camera.stop_preview()
