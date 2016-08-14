@@ -41,7 +41,7 @@ def take_dslr_photo(count=BURST_COUNT):
     show_overlay("intro")
 
 def update_battery_level():
-    if gp_camera is None:
+    if gp_camera is None or gp_camera.battery_level is None:
         pi_camera.annotate_text = ""
         return
     battery = gp_camera.battery_level

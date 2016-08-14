@@ -17,6 +17,7 @@ class Camera(metaclass=Singleton):
     _camera = None
     _context = None
     _output_dir = None
+    battery_level = None
 
     def __init__(self):
         self._output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "captures"))
@@ -61,13 +62,12 @@ class Camera(metaclass=Singleton):
         print("Got file")
         gp.check_result(gp.gp_file_save(camera_file, target))
         print("Saved to {}".format(target))
+        self.update_battery_level()
         self._teardown()
         return target
 
-    @property
-    def battery_level(self):
-        self._setup()
+    def update_battery_level(self):
         config = self._camera.get_config(self._context)
         widget = config.get_child_by_name("batterylevel")
         value = widget.get_value()
-        return int(value.rstrip("%"))
+        self.battery_level = int(value.rstrip("%"))
