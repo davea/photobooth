@@ -1,3 +1,3 @@
-ft5406==0.0.2
 gphoto2==1.4.1
 picamera==1.12
+-e git://github.com/pimoroni/python-multitouch.git@6171f2d569dc0dfe4117ae29d73a08ae47183a29#egg=ft5406&subdirectory=library
