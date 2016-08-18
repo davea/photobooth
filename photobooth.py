@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import time
+import logging
 import tempfile
 import random
 from glob import glob
@@ -10,6 +11,11 @@ from ft5406 import Touchscreen
 from PIL import Image
 
 from camera import Camera
+
+logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s - %(message)s', level=logging.DEBUG)
+logging.getLogger("PIL").setLevel(logging.CRITICAL) # We don't care about PIL
+log = logging.getLogger("photobooth.main")
+
 
 TEST_MODE = bool(os.getenv("TEST_MODE", False))
 
@@ -24,28 +30,26 @@ pi_camera_overlays = {}
 # global Touchscreen instance
 touchscreen = None
 
-def take_dslr_photo(count=BURST_COUNT):
+
+def take_dslr_photo():
     global gp_camera
     if gp_camera is None:
-        print("Creating Camera object")
+        log.debug("Creating Camera object")
         gp_camera = Camera()
-    print("Starting countdown...")
+    log.debug("Starting countdown...")
     for i in range(3, 0, -1):
         show_overlay("countdown{}".format(i))
-        print("{}!".format(i))
+        log.debug("{}!".format(i))
         time.sleep(1)
-    for i in range(count):
-        print("Taking photo with gphoto2...")
-        show_overlay("cheese")
-        photo_path = gp_camera.capture()
+    log.debug("Taking photo with gphoto2...")
+    show_overlay("cheese")
+    photo_path = gp_camera.capture(count=BURST_COUNT, processing_callback=lambda: show_overlay("please_wait"))
     show_photo(photo_path)
+
 def update_battery_level():
-    if gp_camera is None or gp_camera.battery_level is None:
-        pi_camera.annotate_text = ""
-        return
-    battery = gp_camera.battery_level
-    if battery < 100:
-        pi_camera.annotate_text = "Camera battery low! {}%".format(battery)
+    battery_level = gp_camera.battery_level if gp_camera is not None else None
+    if battery_level is not None and battery_level <= 25:
+        pi_camera.annotate_text = "Camera battery low! {}%".format(battery_level)
     else:
         pi_camera.annotate_text = ""
 
@@ -73,28 +77,28 @@ def setup_overlays():
             'bytes': image.tobytes(),
             'size': size,
         }
-        print("all done")
+        log.debug("all done")
 
 def load_image_for_overlay(path):
     # Load the arbitrarily sized image
     img = Image.open(path)
     # Create an image padded to the required size with
     # mode 'RGB'
-    print("loaded image")
+    log.debug("loaded image")
     pad = Image.new('RGB', (
         ((img.size[0] + 31) // 32) * 32,
         ((img.size[1] + 15) // 16) * 16,
         ))
-    print("created new image")
+    log.debug("created new image")
     # Paste the original image into the padded one
     pad.paste(img, (0, 0))
-    print("pasted image")
+    log.debug("pasted image")
     return img.size, pad
 
 def show_overlay(name):
     o = pi_camera_overlays[name]
     window = (0, 480-o['size'][1], o['size'][0], o['size'][1])
-    overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=3, window=window, fullscreen=False)
+    overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=4, window=window, fullscreen=False)
     while len(pi_camera.overlays) > 1:
         pi_camera.remove_overlay(pi_camera.overlays[0])
     update_battery_level()
@@ -117,23 +121,24 @@ def teardown_picamera():
 def main():
     setup_picamera()
     setup_touchscreen()
-    print("Running in test mode" if TEST_MODE else "Running in interactive mode")
+    log.debug("Running in test mode" if TEST_MODE else "Running in interactive mode")
     try:
         while True:
             if TEST_MODE:
                 for i in range(random.randint(1, 10)):
                     take_dslr_photo()
                     sleep = random.randint(0, 3)
-                    print("Sleeping for {} seconds...".format(sleep))
+                    log.debug("Sleeping for {} seconds...".format(sleep))
                     time.sleep(sleep)
-                sleep = random.randint(30, 60*15)
-                print("Sleeping for {} seconds...".format(sleep))
+                # sleep = random.randint(30, 60*15)
+                sleep = random.randint(10, 20)
+                log.debug("Sleeping for {} seconds...".format(sleep))
                 time.sleep(sleep)
             else:
                 for touch in touchscreen.poll():
                     touch.handle_events()
     except KeyboardInterrupt:
-        print("Caught Ctrl-C, shutting down...")
+        log.info("Caught Ctrl-C, shutting down...")
     finally:
         teardown_picamera()
 

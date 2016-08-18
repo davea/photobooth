@@ -1,9 +1,12 @@
 import os
 import time
 import tempfile
+from logging import getLogger
 from datetime import datetime
 
 import gphoto2 as gp
+
+log = getLogger("photobooth.camera")
 
 class Singleton(type):
     _instances = {}
@@ -27,22 +30,22 @@ class Camera(metaclass=Singleton):
 
     def _setup(self):
         if self._camera is not None:
-            print("gphoto connection already set up")
+            log.debug("gphoto connection already set up")
             return
-        print("Setting up gphoto connection")
+        log.debug("Setting up gphoto connection")
         self._context = gp.gp_context_new()
         self._camera = gp.check_result(gp.gp_camera_new())
         gp.check_result(gp.gp_camera_init(self._camera, self._context))
 
     def _teardown(self):
         if self._camera is None:
-            print("Already closed gphoto connection")
+            log.warning("Already closed gphoto connection")
             return
-        print("Closing gphoto connection")
+        log.debug("Closing gphoto connection")
         gp.check_result(gp.gp_camera_exit(self._camera, self._context))
         self._context, self._camera = None, None
 
-    def capture(self):
+    def capture(self, processing_callback=None, count=1):
         if self._camera is None:
             self._setup()
         while True:
@@ -51,23 +54,27 @@ class Camera(metaclass=Singleton):
                     self._camera, gp.GP_CAPTURE_IMAGE, self._context))
                 break
             except gp.GPhoto2Error as e:
-                print("Exception when taking picture! Trying again.\n{}".format(e))
+                log.exception("Exception when taking picture! Trying again.")
                 time.sleep(0.1)
-        print("Took photo")
+        log.info("Took photo")
+        if callable(processing_callback):
+            processing_callback()
         prefix = datetime.now().strftime("%Y-%m-%d-%H%M%S-")
         _, target = tempfile.mkstemp(prefix=prefix, suffix=".jpg", dir=self._output_dir)
         camera_file = gp.check_result(gp.gp_camera_file_get(
                 self._camera, file_path.folder, file_path.name,
                 gp.GP_FILE_TYPE_NORMAL, self._context))
-        print("Got file")
+        log.debug("Got file")
         gp.check_result(gp.gp_file_save(camera_file, target))
-        print("Saved to {}".format(target))
+        log.info("Saved to {}".format(target))
         self.update_battery_level()
         self._teardown()
         return target
 
     def update_battery_level(self):
+        self.battery_level = int(self._get_config("batterylevel").rstrip("%"))
+
+    def _get_config(self, name):
         config = self._camera.get_config(self._context)
-        widget = config.get_child_by_name("batterylevel")
-        value = widget.get_value()
-        self.battery_level = int(value.rstrip("%"))
+        widget = config.get_child_by_name(name)
+        return widget.get_value()
