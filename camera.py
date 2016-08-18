@@ -35,7 +35,15 @@ class Camera(metaclass=Singleton):
         log.debug("Setting up gphoto connection")
         self._context = gp.gp_context_new()
         self._camera = gp.check_result(gp.gp_camera_new())
-        gp.check_result(gp.gp_camera_init(self._camera, self._context))
+        try:
+            gp.check_result(gp.gp_camera_init(self._camera, self._context))
+        except gp.GPhoto2Error as e:
+            if e.code == gp.GP_ERROR_MODEL_NOT_FOUND:
+                log.critical("Camera not connected!")
+                raise CameraNotConnectedError()
+            else:
+                log.exception("An error occurred whilst trying to setup the camera.")
+                raise CameraError()
 
     def _teardown(self):
         if self._camera is None:
@@ -78,3 +86,6 @@ class Camera(metaclass=Singleton):
         config = self._camera.get_config(self._context)
         widget = config.get_child_by_name(name)
         return widget.get_value()
+
+class CameraError(Exception): pass
+class CameraNotConnectedError(CameraError): pass

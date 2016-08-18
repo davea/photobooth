@@ -10,7 +10,7 @@ from picamera import PiCamera, Color
 from ft5406 import Touchscreen
 from PIL import Image
 
-from camera import Camera
+from camera import Camera, CameraError, CameraNotConnectedError
 
 logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s - %(message)s', level=logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.CRITICAL) # We don't care about PIL
@@ -44,7 +44,16 @@ def take_dslr_photo():
         time.sleep(1)
     log.debug("Taking photo with gphoto2...")
     show_overlay("cheese")
-    photo_path = gp_camera.capture(count=BURST_COUNT, processing_callback=lambda: show_overlay("please_wait"))
+    try:
+        photo_path = gp_camera.capture(count=BURST_COUNT, processing_callback=lambda: show_overlay("please_wait"))
+    except CameraNotConnectedError:
+        log.error("Camera isn't connected.")
+        show_overlay("intro")
+        return
+    except CameraError:
+        log.exception("Something went horribly wrong whilst trying to take a photo.")
+        show_overlay("intro")
+        return
     if PRINT_PHOTOS:
         add_to_print_queue(photo_path)
     show_photo(photo_path)
