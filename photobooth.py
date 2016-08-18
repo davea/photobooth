@@ -77,22 +77,19 @@ def setup_overlays():
             'bytes': image.tobytes(),
             'size': size,
         }
-        log.debug("all done")
+        log.debug("Loaded '{}' overlay".format(name))
 
 def load_image_for_overlay(path):
     # Load the arbitrarily sized image
     img = Image.open(path)
     # Create an image padded to the required size with
     # mode 'RGB'
-    log.debug("loaded image")
     pad = Image.new('RGB', (
         ((img.size[0] + 31) // 32) * 32,
         ((img.size[1] + 15) // 16) * 16,
         ))
-    log.debug("created new image")
     # Paste the original image into the padded one
     pad.paste(img, (0, 0))
-    log.debug("pasted image")
     return img.size, pad
 
 def show_overlay(name):
