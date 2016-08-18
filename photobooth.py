@@ -20,6 +20,7 @@ log = logging.getLogger("photobooth.main")
 TEST_MODE = bool(os.getenv("TEST_MODE", False))
 
 BURST_COUNT = 1
+PRINT_PHOTOS = bool(os.getenv("PRINT_PHOTOS", False))
 OVERLAY_ALPHA = 128
 
 # global variables (ick) for gphoto2
@@ -44,7 +45,12 @@ def take_dslr_photo():
     log.debug("Taking photo with gphoto2...")
     show_overlay("cheese")
     photo_path = gp_camera.capture(count=BURST_COUNT, processing_callback=lambda: show_overlay("please_wait"))
+    if PRINT_PHOTOS:
+        add_to_print_queue(photo_path)
     show_photo(photo_path)
+
+def add_to_print_queue(path):
+    pass
 
 def update_battery_level():
     battery_level = gp_camera.battery_level if gp_camera is not None else None
@@ -92,24 +98,28 @@ def load_image_for_overlay(path):
     pad.paste(img, (0, 0))
     return img.size, pad
 
-def show_overlay(name):
+def show_overlay(name, remove_others=True):
     o = pi_camera_overlays[name]
     window = (0, 480-o['size'][1], o['size'][0], o['size'][1])
     overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=4, window=window, fullscreen=False)
-    while len(pi_camera.overlays) > 1:
-        pi_camera.remove_overlay(pi_camera.overlays[0])
+    if remove_others:
+        remove_overlays(max_length=1)
     update_battery_level()
 
 def show_photo(path):
     _, image = load_image_for_overlay(path)
     image = image.resize((800, 532)).crop((0,26,800,506))
-    while pi_camera.overlays:
-        pi_camera.remove_overlay(pi_camera.overlays[0])
+    remove_overlays()
     overlay = pi_camera.add_overlay(image.tobytes(), size=image.size, layer=3)
-
+    if PRINT_PHOTOS:
+        show_overlay("printing", remove_others=False)
     # wait for a few seconds or until the screen is tapped
     time.sleep(5)
     show_overlay("intro")
+
+def remove_overlays(max_length=0):
+    while len(pi_camera.overlays) > max_length:
+        pi_camera.remove_overlay(pi_camera.overlays[0])
 
 def teardown_picamera():
     pi_camera.stop_preview()
