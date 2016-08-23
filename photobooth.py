@@ -54,8 +54,6 @@ def take_dslr_photo():
         log.exception("Something went horribly wrong whilst trying to take a photo.")
         show_overlay("intro")
         return
-    if PRINT_PHOTOS:
-        add_to_print_queue(photo_path)
     show_photo(photo_path)
 
 def add_to_print_queue(path):
@@ -121,14 +119,23 @@ def show_photo(path):
     remove_overlays()
     overlay = pi_camera.add_overlay(image.tobytes(), size=image.size, layer=3)
     if PRINT_PHOTOS:
-        show_overlay("printing", remove_others=False)
-    # wait for a few seconds or until the screen is tapped
-    time.sleep(5)
+        show_overlay("print_confirm", remove_others=False)
+        if wait_for_print_confirmation():
+            remove_overlays(max_length=1, reverse=True)
+            show_overlay("printing", remove_others=False)
+            add_to_print_queue(path)
+            time.sleep(5)
+    else:
+        time.sleep(5)
     show_overlay("intro")
 
-def remove_overlays(max_length=0):
+def wait_for_print_confirmation():
+    time.sleep(10)
+    return True
+
+def remove_overlays(max_length=0, reverse=False):
     while len(pi_camera.overlays) > max_length:
-        pi_camera.remove_overlay(pi_camera.overlays[0])
+        pi_camera.remove_overlay(pi_camera.overlays[-1 if reverse else 0])
 
 def teardown_picamera():
     pi_camera.stop_preview()
