@@ -54,7 +54,10 @@ def take_dslr_photo():
         log.exception("Something went horribly wrong whilst trying to take a photo.")
         show_overlay("intro")
         return
-    show_photo(photo_path)
+    if photo_path is not None:
+        show_photo(photo_path)
+    else:
+        show_overlay("intro", message="Oops, couldn't take photo! Try again!")
 
 def add_to_print_queue(path):
     pass
@@ -105,13 +108,15 @@ def load_image_for_overlay(path):
     pad.paste(img, (0, 0))
     return img.size, pad
 
-def show_overlay(name, remove_others=True):
+def show_overlay(name, remove_others=True, message=""):
     o = pi_camera_overlays[name]
     window = (0, 480-o['size'][1], o['size'][0], o['size'][1])
     overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=4, window=window, fullscreen=False)
     if remove_others:
         remove_overlays(max_length=1)
-    update_battery_level()
+    pi_camera.annotate_text = message
+    if not message:
+        update_battery_level()
 
 def show_photo(path):
     _, image = load_image_for_overlay(path)
@@ -162,6 +167,8 @@ def main():
                     touch.handle_events()
     except KeyboardInterrupt:
         log.info("Caught Ctrl-C, shutting down...")
+    except Exception:
+        log.exception("some other exception caused a shutdown:")
     finally:
         teardown_picamera()
 

@@ -20,10 +20,13 @@ class Camera(metaclass=Singleton):
     _camera = None
     _context = None
     _output_dir = None
+    _max_retries = 5
     battery_level = None
 
-    def __init__(self):
+    def __init__(self, max_retries=None):
         self._output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "captures"))
+        if max_retries:
+            self._max_retries = max_retries
 
     def __del__(self):
         self._teardown()
@@ -56,7 +59,7 @@ class Camera(metaclass=Singleton):
     def capture(self, processing_callback=None, count=1):
         if self._camera is None:
             self._setup()
-        while True:
+        for _ in range(self._max_retries):
             try:
                 file_path = gp.check_result(gp.gp_camera_capture(
                     self._camera, gp.GP_CAPTURE_IMAGE, self._context))
@@ -64,6 +67,9 @@ class Camera(metaclass=Singleton):
             except gp.GPhoto2Error as e:
                 log.exception("Exception when taking picture! Trying again.")
                 time.sleep(0.1)
+        else:
+            log.error("Couldn't take a photo after {} attempts, giving up!".format(self._max_retries))
+            return None
         log.info("Took photo")
         if callable(processing_callback):
             processing_callback()
