@@ -5,6 +5,7 @@ import logging
 import tempfile
 import random
 from glob import glob
+from configparser import ConfigParser
 
 from picamera import PiCamera, Color
 from ft5406 import Touchscreen
@@ -17,12 +18,10 @@ logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s - %(message)s', l
 logging.getLogger("PIL").setLevel(logging.CRITICAL) # We don't care about PIL
 log = logging.getLogger("photobooth.main")
 
-
 TEST_MODE = bool(os.getenv("TEST_MODE", False))
 
-BURST_COUNT = 1
-PRINT_PHOTOS = bool(os.getenv("PRINT_PHOTOS", False))
-OVERLAY_ALPHA = 128
+config = ConfigParser()
+config.read('config.ini')
 
 # global PiCamera instance
 pi_camera = None
@@ -40,7 +39,7 @@ def take_dslr_photo():
     log.debug("Taking photo with gphoto2...")
     show_overlay("cheese")
     try:
-        photo_path = Camera().capture(count=BURST_COUNT, processing_callback=lambda: show_overlay("please_wait"))
+        photo_path = Camera().capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
     except CameraNotConnectedError:
         log.error("Camera isn't connected.")
         show_overlay("intro")
@@ -56,7 +55,7 @@ def take_dslr_photo():
 
 def update_battery_level():
     battery_level = Camera().battery_level
-    if battery_level is not None and battery_level <= 25:
+    if battery_level is not None and battery_level <= config['camera'].getint('battery_warning'):
         pi_camera.annotate_text = "Camera battery low! {}%".format(battery_level)
     else:
         pi_camera.annotate_text = ""
@@ -107,7 +106,7 @@ def load_image_for_overlay(path):
 def show_overlay(name, remove_others=True, message=""):
     o = pi_camera_overlays[name]
     window = (0, 480-o['size'][1], o['size'][0], o['size'][1])
-    overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=OVERLAY_ALPHA, layer=4, window=window, fullscreen=False)
+    overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=config['general'].getint('overlay_alpha'), layer=4, window=window, fullscreen=False)
     if remove_others:
         remove_overlays(max_length=1)
     pi_camera.annotate_text = message
@@ -120,7 +119,7 @@ def show_photo(path):
     print_image = image.resize((963, 640))
     remove_overlays()
     overlay = pi_camera.add_overlay(display_image.tobytes(), size=display_image.size, layer=3)
-    if PRINT_PHOTOS:
+    if config['printer'].getboolean('enabled'):
         show_overlay("print_confirm", remove_others=False)
         if wait_for_print_confirmation():
             remove_overlays(max_length=1, reverse=True)
