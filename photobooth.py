@@ -63,10 +63,14 @@ def update_battery_level():
 
 def setup_touchscreen():
     global touchscreen
-    touchscreen = Touchscreen()
-    for touch in touchscreen.touches:
-        if touch.slot == 0:
-            touch.on_press = lambda e, t: take_dslr_photo()
+    try:
+        touchscreen = Touchscreen()
+    except RuntimeError:
+        log.error("Couldn't connect to touchscreen, is device connected?")
+    else:
+        for touch in touchscreen.touches:
+            if touch.slot == 0:
+                touch.on_press = lambda e, t: take_dslr_photo()
 
 def setup_picamera():
     global pi_camera
@@ -158,9 +162,11 @@ def main():
                 sleep = random.randint(10, 20)
                 log.debug("Sleeping for {} seconds...".format(sleep))
                 time.sleep(sleep)
-            else:
+            elif touchscreen is not None:
                 for touch in touchscreen.poll():
                     touch.handle_events()
+            else:
+                time.sleep(1)
     except KeyboardInterrupt:
         log.info("Caught Ctrl-C, shutting down...")
     except Exception:
