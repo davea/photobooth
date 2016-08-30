@@ -4,6 +4,9 @@ overlay_alpha = 128
 [camera]
 burst_count = 1
 battery_warning = 25
+max_retries = 5
+preview_vflip = false
+preview_hflip = true
 
 [printer]
 enabled = false

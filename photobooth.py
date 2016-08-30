@@ -39,7 +39,7 @@ def take_dslr_photo():
     log.debug("Taking photo with gphoto2...")
     show_overlay("cheese")
     try:
-        photo_path = Camera().capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
+        photo_path = Camera(max_retries=config['camera'].getint('max_retries')).capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
     except CameraNotConnectedError:
         log.error("Camera isn't connected.")
         show_overlay("intro")
@@ -74,8 +74,8 @@ def setup_touchscreen():
 def setup_picamera():
     global pi_camera
     pi_camera = PiCamera()
-    pi_camera.vflip = False
-    pi_camera.hflip = True
+    pi_camera.vflip = config['camera'].getboolean('preview_vflip')
+    pi_camera.hflip = config['camera'].getboolean('preview_hflip')
     pi_camera.start_preview()
     setup_overlays()
     show_overlay('intro')
