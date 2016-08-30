@@ -15,6 +15,8 @@ class Camera(metaclass=Singleton):
     _context = None
     _output_dir = None
     _max_retries = 5
+    _capture_failure_timeout = 0.1 # How long to wait between capture failures
+
     battery_level = None
 
     def __init__(self, max_retries=None):
@@ -60,7 +62,7 @@ class Camera(metaclass=Singleton):
                 break
             except gp.GPhoto2Error as e:
                 log.exception("Exception when taking picture! Trying again.")
-                time.sleep(0.1)
+                time.sleep(self._capture_failure_timeout)
         else:
             log.error("Couldn't take a photo after {} attempts, giving up!".format(self._max_retries))
             return None
