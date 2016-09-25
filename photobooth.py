@@ -116,18 +116,16 @@ def show_overlay(name, remove_others=True, message=""):
 def show_photo(path):
     _, image = load_image_for_overlay(path)
     display_image = image.resize((800, 532)).crop((0,26,800,506))
-    print_image = image.resize((963, 640))
     remove_overlays()
     overlay = pi_camera.add_overlay(display_image.tobytes(), size=display_image.size, layer=3)
     if config['printer'].getboolean('enabled'):
         show_overlay("print_confirm", remove_others=False)
-        if wait_for_print_confirmation():
+        if config['printer'].getboolean('print_everything') or wait_for_print_confirmation():
             remove_overlays(max_length=1, reverse=True)
             show_overlay("printing", remove_others=False)
-            send_image_to_printer(print_image)
-            time.sleep(5)
+            Printer(config=config).print(image)
     else:
-        time.sleep(5)
+        time.sleep(config['camera'].getint('review_timeout'))
     show_overlay("intro")
 
 def wait_for_print_confirmation():
