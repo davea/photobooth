@@ -144,12 +144,10 @@ def show_photo(path):
 def wait_for_print_confirmation():
     clear_touches()
     x, y = touchscreen_queue.get()
-    # If the touch was on the right half of the screen, assume the user wants
-    # to print the displayed image.
-    return x > (config['general'].getint('screen_width') / 2)
-
-def send_image_to_printer(image):
-    pass
+    # If the touch was on the bottom right quadrant of the screen, assume the
+    # user wants to print the displayed image.
+    return x > (config['general'].getint('screen_width') / 2) and \
+           y > (config['general'].getint('screen_height') / 2)
 
 def remove_overlays(max_length=0, reverse=False):
     while len(pi_camera.overlays) > max_length:
