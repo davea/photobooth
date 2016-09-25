@@ -18,8 +18,6 @@ logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s - %(message)s', l
 logging.getLogger("PIL").setLevel(logging.CRITICAL) # We don't care about PIL
 log = logging.getLogger("photobooth.main")
 
-TEST_MODE = bool(os.getenv("TEST_MODE", False))
-
 config = ConfigParser()
 config.read('config.ini')
 
@@ -143,27 +141,16 @@ def teardown_picamera():
     pi_camera.stop_preview()
     pi_camera.close()
 
+def main_loop():
+    while True:
+        for touch in touchscreen.poll():
+            touch.handle_events()
+
 def main():
     setup_picamera()
     setup_touchscreen()
-    log.debug("Running in test mode" if TEST_MODE else "Running in interactive mode")
     try:
-        while True:
-            if TEST_MODE:
-                for i in range(random.randint(1, 10)):
-                    take_dslr_photo()
-                    sleep = random.randint(0, 3)
-                    log.debug("Sleeping for {} seconds...".format(sleep))
-                    time.sleep(sleep)
-                # sleep = random.randint(30, 60*15)
-                sleep = random.randint(10, 20)
-                log.debug("Sleeping for {} seconds...".format(sleep))
-                time.sleep(sleep)
-            elif touchscreen is not None:
-                for touch in touchscreen.poll():
-                    touch.handle_events()
-            else:
-                time.sleep(1)
+        main_loop()
     except KeyboardInterrupt:
         log.info("Caught Ctrl-C, shutting down...")
     except Exception:
