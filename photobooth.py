@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import os
 import time
+import queue
+import random
 import logging
 import tempfile
-import random
 from glob import glob
 from configparser import ConfigParser
 
@@ -14,7 +15,7 @@ from PIL import Image
 from camera import Camera, CameraError, CameraNotConnectedError
 from printer import Printer
 
-logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s - %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s - %(thread)d - %(message)s', level=logging.DEBUG)
 logging.getLogger("PIL").setLevel(logging.CRITICAL) # We don't care about PIL
 log = logging.getLogger("photobooth.main")
 
@@ -26,6 +27,7 @@ pi_camera = None
 pi_camera_overlays = {}
 # global Touchscreen instance
 touchscreen = None
+touchscreen_queue = queue.Queue()
 
 
 def take_dslr_photo():
@@ -50,6 +52,7 @@ def take_dslr_photo():
         show_photo(photo_path)
     else:
         show_overlay("intro", message="Oops, couldn't take photo! Try again!")
+    clear_touches()
 
 def update_battery_level():
     battery_level = Camera().battery_level
@@ -64,10 +67,20 @@ def setup_touchscreen():
         touchscreen = Touchscreen()
     except RuntimeError:
         log.error("Couldn't connect to touchscreen, is device connected?")
-    else:
-        for touch in touchscreen.touches:
-            if touch.slot == 0:
-                touch.on_press = lambda e, t: take_dslr_photo()
+        return
+    for touch in (t for t in touchscreen.touches if t.slot == 0):
+        touch.on_press = lambda e, t: screen_pressed(t.x, t.y)
+    touchscreen.run()
+
+def teardown_touchscreen():
+    try:
+        touchscreen.stop()
+    except Exception:
+        log.exception("Couldn't teardown touchscreen:")
+
+def screen_pressed(x, y):
+    log.debug("Screen pressed at {},{}, enqueuing".format(x, y))
+    touchscreen_queue.put((x, y))
 
 def setup_picamera():
     global pi_camera
@@ -103,7 +116,7 @@ def load_image_for_overlay(path):
 
 def show_overlay(name, remove_others=True, message=""):
     o = pi_camera_overlays[name]
-    window = (0, 480-o['size'][1], o['size'][0], o['size'][1])
+    window = (0, config['general'].getint('screen_height')-o['size'][1], o['size'][0], o['size'][1])
     overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=config['general'].getint('overlay_alpha'), layer=4, window=window, fullscreen=False)
     if remove_others:
         remove_overlays(max_length=1)
@@ -113,7 +126,7 @@ def show_overlay(name, remove_others=True, message=""):
 
 def show_photo(path):
     _, image = load_image_for_overlay(path)
-    display_image = image.resize((800, 532)).crop((0,26,800,506))
+    display_image = image.resize((config['general'].getint('screen_width'), 532)).crop((0,26,800,506))
     remove_overlays()
     overlay = pi_camera.add_overlay(display_image.tobytes(), size=display_image.size, layer=3)
     if config['printer'].getboolean('enabled'):
@@ -127,8 +140,11 @@ def show_photo(path):
     show_overlay("intro")
 
 def wait_for_print_confirmation():
-    time.sleep(10)
-    return True
+    clear_touches()
+    x, y = touchscreen_queue.get()
+    # If the touch was on the right half of the screen, assume the user wants
+    # to print the displayed image.
+    return x > (config['general'].getint('screen_width') / 2)
 
 def send_image_to_printer(image):
     pass
@@ -138,13 +154,32 @@ def remove_overlays(max_length=0, reverse=False):
         pi_camera.remove_overlay(pi_camera.overlays[-1 if reverse else 0])
 
 def teardown_picamera():
-    pi_camera.stop_preview()
-    pi_camera.close()
+   try:
+       pi_camera.stop_preview()
+       pi_camera.close()
+   except Exception:
+       log.exception("Couldn't teardown picamera:")
 
 def main_loop():
+    # We're on the main screen waiting for the screen to be tapped...
     while True:
-        for touch in touchscreen.poll():
-            touch.handle_events()
+        touchscreen_queue.get()
+        take_dslr_photo()
+
+def clear_touches():
+    # The touchscreen might receive touches when we're in the middle of
+    # something else (e.g. showing the countdown, previewing print, sending to
+    # printer), and if we don't clear them they'll cause unexpected events
+    # when we return to the main loop.
+    # This method discards any queued touches so we can be sure the next touch
+    # is one we actually care about.
+    while True:
+        try:
+            touchscreen_queue.get(False)
+            log.debug("ignored a touch")
+        except queue.Empty:
+            log.debug("touchscreen_queue empty")
+            break
 
 def main():
     setup_picamera()
@@ -157,6 +192,7 @@ def main():
         log.exception("some other exception caused a shutdown:")
     finally:
         teardown_picamera()
+        teardown_touchscreen()
 
 if __name__ == '__main__':
     main()
