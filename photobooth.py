@@ -137,6 +137,8 @@ def show_photo(path):
             Printer(config=config).print(image)
     else:
         time.sleep(config['camera'].getint('review_timeout'))
+    remove_overlays()
+    time.sleep(0.5)
     show_overlay("intro")
 
 def wait_for_print_confirmation():
