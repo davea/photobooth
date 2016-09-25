@@ -39,7 +39,7 @@ def take_dslr_photo():
     log.debug("Taking photo with gphoto2...")
     show_overlay("cheese")
     try:
-        photo_path = Camera(max_retries=config['camera'].getint('max_retries')).capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
+        photo_path = Camera().capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
     except CameraNotConnectedError:
         log.error("Camera isn't connected.")
         show_overlay("intro")
@@ -85,9 +85,13 @@ def screen_pressed(x, y):
 def setup_picamera():
     global pi_camera
     pi_camera = PiCamera()
-    pi_camera.vflip = config['camera'].getboolean('preview_vflip')
-    pi_camera.hflip = config['camera'].getboolean('preview_hflip')
+    pi_camera.exposure_compensation = config['preview'].getint('exposure_compensation')
+    pi_camera.framerate = config['preview'].getint('framerate')
+    pi_camera.resolution = (config['preview'].getint('width'), config['preview'].getint('height'))
+    pi_camera.vflip = config['preview'].getboolean('vflip')
+    pi_camera.hflip = config['preview'].getboolean('hflip')
     pi_camera.start_preview()
+    log.debug("mode: {}".format(pi_camera.sensor_mode))
     setup_overlays()
     show_overlay('intro')
 
@@ -181,7 +185,13 @@ def clear_touches():
             log.debug("touchscreen_queue empty")
             break
 
+def setup_dslr():
+    # Because the Camera class is a singleton we can pass the config just this
+    # once and subsequent Camera() calls will return a pre-configured instance.
+    Camera(config)
+
 def main():
+    setup_dslr()
     setup_picamera()
     setup_touchscreen()
     try:

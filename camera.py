@@ -14,17 +14,24 @@ class Camera(metaclass=Singleton):
     _camera = None
     _context = None
     _output_dir = None
-    _max_retries = 5
+    _config = None
     _capture_failure_timeout = 0.1 # How long to wait between capture failures
 
     battery_level = None
 
-    def __init__(self, max_retries=None):
+    def __init__(self, config):
         self._output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "captures"))
-        if max_retries:
-            self._max_retries = max_retries
+        self._config = config
+        self._set_gphoto_config_values()
 
     def __del__(self):
+        self._teardown()
+
+    def _set_gphoto_config_values(self):
+        self._setup()
+        for name, value in self._config.items('gphoto'):
+            log.debug("Setting gphoto option {} = {}".format(name, value))
+            self._set_config(name, value)
         self._teardown()
 
     def _setup(self):
@@ -55,7 +62,7 @@ class Camera(metaclass=Singleton):
     def capture(self, processing_callback=None, count=1):
         if self._camera is None:
             self._setup()
-        for _ in range(self._max_retries):
+        for _ in range(self._config['camera'].getint('max_retries')):
             try:
                 file_path = gp.check_result(gp.gp_camera_capture(
                     self._camera, gp.GP_CAPTURE_IMAGE, self._context))
@@ -64,7 +71,7 @@ class Camera(metaclass=Singleton):
                 log.exception("Exception when taking picture! Trying again.")
                 time.sleep(self._capture_failure_timeout)
         else:
-            log.error("Couldn't take a photo after {} attempts, giving up!".format(self._max_retries))
+            log.error("Couldn't take a photo after {} attempts, giving up!".format(self._config['camera'].getint('max_retries')))
             return None
         log.info("Took photo")
         if callable(processing_callback):
@@ -89,5 +96,24 @@ class Camera(metaclass=Singleton):
         widget = config.get_child_by_name(name)
         return widget.get_value()
 
+    def _set_config(self, name, value):
+        coercions = {
+            'burstnumber': float
+        }
+        config = self._camera.get_config(self._context)
+        widget = config.get_child_by_name(name)
+        widget.set_value(coercions.get(name, str)(value))
+        self._camera.set_config(config, self._context)
+
 class CameraError(Exception): pass
 class CameraNotConnectedError(CameraError): pass
+
+if __name__ == '__main__':
+    import logging
+    logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s - %(thread)d - %(message)s', level=logging.DEBUG)
+    from configparser import ConfigParser
+    config = ConfigParser()
+    config.read('config.ini')
+    c = Camera(config)
+    c._setup()
+    print(c._get_config('iso'))
