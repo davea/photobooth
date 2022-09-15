@@ -5,30 +5,32 @@ from logging import getLogger
 
 from PyOBEX.client import Client
 
-from singleton import Singleton
-
 log = getLogger("photobooth.camera")
 
 
-class Printer(metaclass=Singleton):
+class Printer:
     config = None
     _client = None
 
     def __init__(self, config):
-        self.config = config['printer']
+        self.config = config["printer"]
 
     def print(self, image):
         if not self._setup():
-            log.debug("Giving up attempting to print because couldn't connect to printer.")
+            log.debug(
+                "Giving up attempting to print because couldn't connect to printer."
+            )
             return False
-        w, h = self.config.getint('width'), self.config.getint('height')
+        w, h = self.config.getint("width"), self.config.getint("height")
         log.debug("resizing image to {}x{}...".format(w, h))
         print_image = image.resize((w, h))
         buffer = BytesIO()
-        print_image.save(buffer, self.config['format'])
+        print_image.save(buffer, self.config["format"])
         image_bytes = buffer.getvalue()
-        filename = "{}.{}".format(uuid4(), self.config['format'].lower())
-        log.debug("sending {} bytes to printer as {}...".format(len(image_bytes), filename))
+        filename = "{}.{}".format(uuid4(), self.config["format"].lower())
+        log.debug(
+            "sending {} bytes to printer as {}...".format(len(image_bytes), filename)
+        )
         self._client.put(filename, image_bytes)
         log.debug("done.")
         self._teardown()
@@ -39,8 +41,8 @@ class Printer(metaclass=Singleton):
         if self._client is not None:
             log.debug("Already connected to printer.")
             return True
-        mac = self.config['address']
-        channel = self.config.getint('channel')
+        mac = self.config["address"]
+        channel = self.config.getint("channel")
         self._client = Client(mac, channel)
         try:
             self._client.connect()
