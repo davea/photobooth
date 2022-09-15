@@ -265,7 +265,8 @@ def clear_touches():
 
 def setup_dslr():
     global dslr_camera
-    dslr_camera = Camera(config)
+    if config["camera"].getboolean("dslr_enabled"):
+        dslr_camera = Camera(config)
 
 
 def setup_printer():
@@ -275,7 +276,7 @@ def setup_printer():
 
 
 def main():
-    # setup_dslr()
+    setup_dslr()
     setup_printer()
     setup_picamera()
     setup_touchscreen()
