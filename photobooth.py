@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import time
+from datetime import datetime
 import queue
 import random
 import logging
@@ -39,31 +40,40 @@ dslr_camera = None
 printer = None
 
 
-def take_dslr_photo():
+def take_photo():
     log.debug("Starting countdown...")
     for i in range(3, 0, -1):
         show_overlay("countdown{}".format(i))
         log.debug("{}!".format(i))
-        time.sleep(1)
-    log.debug("Taking photo with gphoto2...")
+        time.sleep(0.1)
+    log.debug("Taking photo...")
     show_overlay("cheese")
-    # try:
-    #     photo_path = dslr_camera.capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
-    # except CameraNotConnectedError:
-    #     log.error("Camera isn't connected.")
-    #     show_overlay("intro")
-    #     return
-    # except CameraError:
-    #     log.exception("Something went horribly wrong whilst trying to take a photo.")
-    #     show_overlay("intro")
-    #     return
-    # if photo_path is not None:
-    #     show_photo(photo_path)
-    # else:
-    #     show_overlay("intro", message="Oops, couldn't take photo! Try again!")
+    photo_path = None
+    if dslr_camera:
+        try:
+            photo_path = dslr_camera.capture(
+                count=config["camera"].getint("burst_count"),
+                processing_callback=lambda: show_overlay("please_wait"),
+            )
+        except CameraNotConnectedError:
+            log.error("Camera isn't connected.")
+            show_overlay("intro")
+            return
+        except CameraError:
+            log.exception(
+                "Something went horribly wrong whilst trying to take a photo."
+            )
+            show_overlay("intro")
+            return
+    else:
+        # fall back to capturing from picamera
+        photo_path = f"{config['camera']['output_dir']}{datetime.now().strftime('%Y-%m-%d-%H%M%S')}.jpg"
+        pi_camera.capture_file(photo_path)
+    if photo_path is not None:
+        show_photo(photo_path)
+    else:
+        show_overlay("intro", message="Oops, couldn't take photo! Try again!")
     clear_touches()
-    time.sleep(3)
-    show_overlay("intro")
 
 
 def update_battery_level():
@@ -234,7 +244,7 @@ def main_loop():
         # time.sleep(1)
         touchscreen_queue.get()
         log.debug("dequeued a touch")
-        take_dslr_photo()
+        take_photo()
 
 
 def clear_touches():

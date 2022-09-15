@@ -19,9 +19,7 @@ class Camera:
     battery_level = None
 
     def __init__(self, config):
-        self._output_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "captures")
-        )
+        self._output_dir = config['camera']['output_dir']
         self._config = config
         self._set_gphoto_config_values()
 
