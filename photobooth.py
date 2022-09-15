@@ -115,13 +115,14 @@ def setup_overlays():
         log.debug("Loaded '{}' overlay".format(name))
 
 def load_image_for_overlay(path):
+    h = config['overlay'].getint('height')
+    w = config['overlay'].getint('width')
+    pad = Image.new('RGBA', (w, h))
     # Load the arbitrarily sized image
     img = Image.open(path)
-    h = config['preview'].getint('height')
-    w = config['preview'].getint('width')
-    pad = Image.new('RGBA', (w, h))
     # Paste the original image into the padded one
-    pad.paste(img, (0, 100))
+    coord = (0, h-img.size[1]-config['overlay'].getint('pad_y'))
+    pad.paste(img, coord)
     if config['overlay'].getint('hflip'):
         pad = ImageOps.mirror(pad)
     if config['overlay'].getint('vflip'):
