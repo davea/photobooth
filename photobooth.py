@@ -64,7 +64,7 @@ def update_battery_level():
 def setup_touchscreen():
     global touchscreen
     try:
-        touchscreen = Touchscreen()
+        touchscreen = Touchscreen(device=config['touchscreen']['device'])
     except RuntimeError:
         log.error("Couldn't connect to touchscreen, is device connected?")
         return
