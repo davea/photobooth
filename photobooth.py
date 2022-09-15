@@ -8,9 +8,11 @@ import tempfile
 from glob import glob
 from configparser import ConfigParser
 
-from picamera import PiCamera, Color
+from picamera2 import Picamera2, Preview
+from libcamera import Transform
 from ft5406 import Touchscreen
-from PIL import Image
+from PIL import Image, ImageOps
+import numpy as np
 
 from camera import Camera, CameraError, CameraNotConnectedError
 from printer import Printer
@@ -28,6 +30,8 @@ pi_camera_overlays = {}
 # global Touchscreen instance
 touchscreen = None
 touchscreen_queue = queue.Queue()
+# global Camera instance
+dslr_camera = None
 
 
 def take_dslr_photo():
@@ -39,7 +43,7 @@ def take_dslr_photo():
     log.debug("Taking photo with gphoto2...")
     show_overlay("cheese")
     try:
-        photo_path = Camera().capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
+        photo_path = dslr_camera.capture(count=config['camera'].getint('burst_count'), processing_callback=lambda: show_overlay("please_wait"))
     except CameraNotConnectedError:
         log.error("Camera isn't connected.")
         show_overlay("intro")
@@ -55,7 +59,7 @@ def take_dslr_photo():
     clear_touches()
 
 def update_battery_level():
-    battery_level = Camera().battery_level
+    battery_level = dslr_camera.battery_level
     if battery_level is not None and battery_level <= config['camera'].getint('battery_warning'):
         pi_camera.annotate_text = "Camera battery low! {}%".format(battery_level)
     else:
@@ -86,15 +90,18 @@ def screen_pressed(x, y):
 
 def setup_picamera():
     global pi_camera
-    pi_camera = PiCamera()
-    pi_camera.exposure_compensation = config['preview'].getint('exposure_compensation')
-    pi_camera.framerate = config['preview'].getint('framerate')
-    pi_camera.resolution = (config['preview'].getint('width'), config['preview'].getint('height'))
-    pi_camera.vflip = config['preview'].getboolean('vflip')
-    pi_camera.hflip = config['preview'].getboolean('hflip')
-    pi_camera.start_preview()
-    log.debug("mode: {}".format(pi_camera.sensor_mode))
+    pi_camera = Picamera2()
+    # pi_camera.exposure_compensation = config['preview'].getint('exposure_compensation')
+    # pi_camera.framerate = config['preview'].getint('framerate')
+    # pi_camera.resolution = (config['preview'].getint('width'), config['preview'].getint('height'))
+    # pi_camera.vflip = config['preview'].getboolean('vflip')
+    # pi_camera.hflip = config['preview'].getboolean('hflip')
+    # pi_camera.start_preview()
+    # log.debug("mode: {}".format(pi_camera.sensor_mode))
     setup_overlays()
+    pi_camera.configure(pi_camera.create_preview_configuration())
+    pi_camera.start_preview(Preview.DRM, width=config['preview'].getint('width'), height=config['preview'].getint('height'), transform=Transform(hflip=config['preview'].getint('hflip'), vflip=config['preview'].getint('vflip')))
+    pi_camera.start()
     show_overlay('intro')
 
 def setup_overlays():
@@ -102,7 +109,7 @@ def setup_overlays():
         name = os.path.basename(filename).rsplit(".png", 1)[0]
         size, image = load_image_for_overlay(filename)
         pi_camera_overlays[name] = {
-            'bytes': image.tobytes(),
+            'img': image,
             'size': size,
         }
         log.debug("Loaded '{}' overlay".format(name))
@@ -110,17 +117,24 @@ def setup_overlays():
 def load_image_for_overlay(path):
     # Load the arbitrarily sized image
     img = Image.open(path)
-    # Create an image padded to the required size with
-    # mode 'RGB'
-    pad = Image.new('RGB', (
-        ((img.size[0] + 31) // 32) * 32,
-        ((img.size[1] + 15) // 16) * 16,
-        ))
+    h = config['preview'].getint('height')
+    w = config['preview'].getint('width')
+    pad = Image.new('RGBA', (w, h))
     # Paste the original image into the padded one
-    pad.paste(img, (0, 0))
+    pad.paste(img, (0, 100))
+    if config['overlay'].getint('hflip'):
+        pad = ImageOps.mirror(pad)
+    if config['overlay'].getint('vflip'):
+        pad = ImageOps.flip(pad)
     return img.size, pad
 
 def show_overlay(name, remove_others=True, message=""):
+    log.debug(f"show_overlay {name}")
+
+    o = pi_camera_overlays[name]
+
+    pi_camera.set_overlay(np.array(o['img']))
+    return
     o = pi_camera_overlays[name]
     window = (0, config['general'].getint('screen_height')-o['size'][1], o['size'][0], o['size'][1])
     overlay = pi_camera.add_overlay(o['bytes'], size=o['size'], alpha=config['general'].getint('overlay_alpha'), layer=4, window=window, fullscreen=False)
@@ -131,6 +145,8 @@ def show_overlay(name, remove_others=True, message=""):
         update_battery_level()
 
 def show_photo(path):
+    log.debug(f"show_photo {path}")
+    return
     _, image = load_image_for_overlay(path)
     display_image = image.resize((config['general'].getint('screen_width'), 532)).crop((0,26,800,506))
     remove_overlays()
@@ -156,6 +172,8 @@ def wait_for_print_confirmation():
            y > (config['general'].getint('screen_height') / 2)
 
 def remove_overlays(max_length=0, reverse=False):
+    log.debug("remove_overlays")
+    return
     while len(pi_camera.overlays) > max_length:
         pi_camera.remove_overlay(pi_camera.overlays[-1 if reverse else 0])
 
@@ -169,7 +187,9 @@ def teardown_picamera():
 def main_loop():
     # We're on the main screen waiting for the screen to be tapped...
     while True:
+        # time.sleep(1)
         touchscreen_queue.get()
+        log.debug("dequeued a touch")
         take_dslr_photo()
 
 def clear_touches():
@@ -188,9 +208,8 @@ def clear_touches():
             break
 
 def setup_dslr():
-    # Because the Camera class is a singleton we can pass the config just this
-    # once and subsequent Camera() calls will return a pre-configured instance.
-    Camera(config)
+    global dslr_camera
+    dslr_camera = Camera(config)
 
 def main():
     setup_dslr()

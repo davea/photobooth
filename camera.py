@@ -6,11 +6,9 @@ from datetime import datetime
 
 import gphoto2 as gp
 
-from singleton import Singleton
-
 log = getLogger("photobooth.camera")
 
-class Camera(metaclass=Singleton):
+class Camera:
     _camera = None
     _context = None
     _output_dir = None
