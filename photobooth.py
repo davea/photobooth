@@ -75,6 +75,7 @@ def take_photo():
             pi_camera.capture_file(photo_path)
 
     if photo_path is not None:
+        show_overlay("please_wait")
         show_photo(photo_path)
     else:
         show_overlay("intro", message="Oops, couldn't take photo! Try again!")
@@ -123,6 +124,8 @@ def setup_picamera():
     pi_camera = Picamera2()
     pi_camera.configure(pi_camera.create_preview_configuration())
     pi_camera_still_config = pi_camera.create_still_configuration()
+    pi_camera_still_config["main"]["size"] = (2028, 1520)
+    log.debug(pi_camera_still_config)
     pi_camera.start_preview(
         Preview.DRM,
         width=config["preview"].getint("width"),
@@ -147,12 +150,16 @@ def setup_overlays():
         log.debug("Loaded '{}' overlay".format(name))
 
 
-def load_image_for_overlay(path):
+def load_image_for_overlay(path, resize=None):
     h = config["overlay"].getint("height")
     w = config["overlay"].getint("width")
     pad = Image.new("RGBA", (w, h))
     # Load the arbitrarily sized image
     img = Image.open(path)
+    if resize:
+        old = img.size
+        img = img.resize(resize)
+        log.debug(f"resized from {old} to {resize}")
     # Paste the original image into the padded one
     coord = (0, h - img.size[1] - config["overlay"].getint("pad_y"))
     pad.paste(img, coord)
@@ -194,9 +201,15 @@ def show_overlay(name, remove_others=True, message=""):
 
 def show_photo(path):
     log.debug(f"show_photo {path}")
+    new_size = (config["overlay"].getint("width"), config["overlay"].getint("height"))
+    _, image = load_image_for_overlay(path, resize=new_size)
+    log.debug(f"loaded photo of size {image.size}")
+
+    pi_camera.set_overlay(np.array(image))
+    time.sleep(config["camera"].getint("review_timeout"))
+    show_overlay("intro")
     return
-    _, image = load_image_for_overlay(path)
-    display_image = image.resize((config["general"].getint("screen_width"), 532)).crop(
+    display_image = image.resize((config["overlay"].getint("width"), 532)).crop(
         (0, 26, 800, 506)
     )
     remove_overlays()
