@@ -29,15 +29,16 @@ config = ConfigParser()
 config.read("config.ini")
 
 # global PiCamera instance
-pi_camera = None
+pi_camera: Picamera2 = None
+pi_camera_still_config = None
 pi_camera_overlays = {}
 # global Touchscreen instance
-touchscreen = None
+touchscreen: Touchscreen = None
 touchscreen_queue = queue.Queue()
 # global Camera instance
-dslr_camera = None
+dslr_camera: Camera = None
 # global Printer instance
-printer = None
+printer: Printer = None
 
 
 def take_photo():
@@ -68,7 +69,11 @@ def take_photo():
     else:
         # fall back to capturing from picamera
         photo_path = f"{config['camera']['output_dir']}{datetime.now().strftime('%Y-%m-%d-%H%M%S')}.jpg"
-        pi_camera.capture_file(photo_path)
+        if config["camera"].getboolean("picamera_full_res"):
+            pi_camera.switch_mode_and_capture_file(pi_camera_still_config, photo_path)
+        else:
+            pi_camera.capture_file(photo_path)
+
     if photo_path is not None:
         show_photo(photo_path)
     else:
@@ -113,10 +118,11 @@ def screen_pressed(x, y):
 
 
 def setup_picamera():
-    global pi_camera
+    global pi_camera, pi_camera_still_config
     setup_overlays()
     pi_camera = Picamera2()
     pi_camera.configure(pi_camera.create_preview_configuration())
+    pi_camera_still_config = pi_camera.create_still_configuration()
     pi_camera.start_preview(
         Preview.DRM,
         width=config["preview"].getint("width"),
