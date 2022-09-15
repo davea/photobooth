@@ -79,7 +79,9 @@ def teardown_touchscreen():
         log.exception("Couldn't teardown touchscreen:")
 
 def screen_pressed(x, y):
-    log.debug("Screen pressed at {},{}, enqueuing".format(x, y))
+    if not x and not y:
+        log.debug(f"Ignoring touch at {x},{y}")
+    log.debug(f"Screen pressed at {x},{y}, enqueuing")
     touchscreen_queue.put((x, y))
 
 def setup_picamera():
