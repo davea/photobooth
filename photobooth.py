@@ -12,7 +12,7 @@ from configparser import ConfigParser
 from picamera2 import Picamera2, Preview
 from libcamera import Transform
 from ft5406 import Touchscreen
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageChops
 import numpy as np
 
 from camera import Camera, CameraError, CameraNotConnectedError
@@ -125,7 +125,6 @@ def setup_picamera():
     pi_camera.configure(pi_camera.create_preview_configuration())
     pi_camera_still_config = pi_camera.create_still_configuration()
     pi_camera_still_config["main"]["size"] = (2028, 1520)
-    log.debug(pi_camera_still_config)
     pi_camera.start_preview(
         Preview.DRM,
         width=config["preview"].getint("width"),
@@ -202,33 +201,24 @@ def show_overlay(name, remove_others=True, message=""):
 def show_photo(path):
     log.debug(f"show_photo {path}")
     new_size = (config["overlay"].getint("width"), config["overlay"].getint("height"))
-    _, image = load_image_for_overlay(path, resize=new_size)
-    log.debug(f"loaded photo of size {image.size}")
+    _, photo = load_image_for_overlay(path, resize=new_size)
+    log.debug(f"loaded photo of size {photo.size}")
 
-    pi_camera.set_overlay(np.array(image))
-    time.sleep(config["camera"].getint("review_timeout"))
-    show_overlay("intro")
-    return
-    display_image = image.resize((config["overlay"].getint("width"), 532)).crop(
-        (0, 26, 800, 506)
-    )
-    remove_overlays()
-    overlay = pi_camera.add_overlay(
-        display_image.tobytes(), size=display_image.size, layer=3
-    )
+
     if printer:
-        show_overlay("print_confirm", remove_others=False)
+        overlay = pi_camera_overlays["print_confirm"]["img"]
+        pi_camera.set_overlay(np.array(Image.alpha_composite(photo, overlay)))
         if (
             config["printer"].getboolean("print_everything")
             or wait_for_print_confirmation()
         ):
-            remove_overlays(max_length=1, reverse=True)
-            show_overlay("printing", remove_others=False)
-            Printer(config=config).print(image)
+            overlay = pi_camera_overlays["printing"]["img"]
+            pi_camera.set_overlay(np.array(Image.alpha_composite(image, overlay)))
+            time.sleep(5)
+            # printer.print(photo)
     else:
+        pi_camera.set_overlay(np.array(photo))
         time.sleep(config["camera"].getint("review_timeout"))
-    remove_overlays()
-    time.sleep(0.5)
     show_overlay("intro")
 
 
