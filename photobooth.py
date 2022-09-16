@@ -204,7 +204,6 @@ def show_photo(path):
     _, photo = load_image_for_overlay(path, resize=new_size)
     log.debug(f"loaded photo of size {photo.size}")
 
-
     if printer:
         overlay = pi_camera_overlays["print_confirm"]["img"]
         pi_camera.set_overlay(np.array(Image.alpha_composite(photo, overlay)))
@@ -213,9 +212,9 @@ def show_photo(path):
             or wait_for_print_confirmation()
         ):
             overlay = pi_camera_overlays["printing"]["img"]
-            pi_camera.set_overlay(np.array(Image.alpha_composite(image, overlay)))
-            time.sleep(5)
-            # printer.print(photo)
+            pi_camera.set_overlay(np.array(Image.alpha_composite(photo, overlay)))
+            # time.sleep(5)
+            printer.print(photo)
     else:
         pi_camera.set_overlay(np.array(photo))
         time.sleep(config["camera"].getint("review_timeout"))
@@ -224,12 +223,19 @@ def show_photo(path):
 
 def wait_for_print_confirmation():
     clear_touches()
+    w, h = config["general"].getint("screen_width"), config["general"].getint(
+        "screen_height"
+    )
     x, y = touchscreen_queue.get()
+    log.debug(f"UI touch at {x}, {y}")
+    if config["overlay"].getint("hflip"):
+        x = w - x
+    if config["overlay"].getint("vflip"):
+        y = h - y
+    log.debug(f"Translated to {x}, {y}")
     # If the touch was on the bottom right quadrant of the screen, assume the
     # user wants to print the displayed image.
-    return x > (config["general"].getint("screen_width") / 2) and y > (
-        config["general"].getint("screen_height") / 2
-    )
+    return x > (w / 2) and y > (h / 2)
 
 
 def remove_overlays(max_length=0, reverse=False):

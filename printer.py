@@ -5,7 +5,7 @@ from logging import getLogger
 
 from PyOBEX.client import Client
 
-log = getLogger("photobooth.camera")
+log = getLogger("photobooth.printer")
 
 
 class Printer:
@@ -23,7 +23,7 @@ class Printer:
             return False
         w, h = self.config.getint("width"), self.config.getint("height")
         log.debug("resizing image to {}x{}...".format(w, h))
-        print_image = image.resize((w, h))
+        print_image = image.resize((w, h)).convert("RGB")
         buffer = BytesIO()
         print_image.save(buffer, self.config["format"])
         image_bytes = buffer.getvalue()
