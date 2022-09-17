@@ -42,11 +42,13 @@ printer: Printer = None
 
 
 def take_photo():
-    log.debug("Starting countdown...")
-    for i in range(3, 0, -1):
-        show_overlay("countdown{}".format(i))
-        log.debug("{}!".format(i))
-        time.sleep(0.1)
+    delay = config["camera"].getint("countdown_delay")
+    if delay:
+        log.debug("Starting countdown...")
+        for i in range(3, 0, -1):
+            show_overlay("countdown{}".format(i))
+            log.debug("{}!".format(i))
+            time.sleep(delay)
     log.debug("Taking photo...")
     show_overlay("cheese")
     photo_path = None

@@ -1,41 +1,55 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>Photobooth Config</title>
-    <meta name="viewport" content="width=device-width, minimum-scale=1.0">
+  <title>Photobooth Config</title>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0">
 </head>
+
 <body>
   {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <div>
-        <ul class="flashes">
-        {% for message in messages %}
-          <li><pre>{{ message }}</pre></li>
-        {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
+  {% if messages %}
+  <div>
+    <ul class="flashes">
+      {% for message in messages %}
+      <li>
+        <pre>{{ message }}</pre>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
   {% endwith %}
   <div>
     <pre>{{ status }}</pre>
   </div>
   <div>
     <form method="post" action="">
-        {% for section in config.values() %}
-            {% if section.items() %}
-                <h2>{{ section.name }}</h2>
-                {% for name, value in section.items() %}
-                    <p>
-                        <label>
-                            <strong>{{ name }}:</strong><br />
-                            <input type="text" name="{{ section.name }}.{{ name }}" value="{{ value }}" />
-                        </label>
-                    </p>
-                {% endfor %}
-            {% endif %}
-        {% endfor %}
-        <input type="submit" value="Save">
+      {% for section in config.values() %}
+      {% if section.items() %}
+      <h2>{{ section.name }}</h2>
+      {% for name, value in section.items() %}
+      <p>
+        <label>
+          <strong>{{ name }}:</strong><br />
+          <input type="text" name="{{ section.name }}.{{ name }}" value="{{ value }}" />
+        </label>
+      </p>
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+      <input type="submit" name="action" value="Save">
+      <details>
+        <summary>Danger</summary>
+        <p>
+          <input type="submit" name="action" value="Reboot">
+        </p>
+        <p>
+          <input type="submit" name="action" value="Poweroff">
+        </p>
+      </details>
     </form>
   </div>
 </body>
+
 </html>
