@@ -3,6 +3,7 @@ import time
 import tempfile
 from logging import getLogger
 from datetime import datetime
+from configparser import NoSectionError
 
 import gphoto2 as gp
 
@@ -19,7 +20,7 @@ class Camera:
     battery_level = None
 
     def __init__(self, config):
-        self._output_dir = config['camera']['output_dir']
+        self._output_dir = config["camera"]["output_dir"]
         self._config = config
         self._set_gphoto_config_values()
 
@@ -28,9 +29,13 @@ class Camera:
 
     def _set_gphoto_config_values(self):
         self._setup()
-        for name, value in self._config.items("gphoto"):
-            log.debug("Setting gphoto option {} = {}".format(name, value))
-            self._set_config(name, value)
+        try:
+            for name, value in self._config.items("gphoto"):
+                log.debug("Setting gphoto option {} = {}".format(name, value))
+                self._set_config(name, value)
+        except NoSectionError:
+            log.debug("No [gphoto] section in config")
+            pass
         self._teardown()
 
     def _setup(self):
